@@ -89,6 +89,13 @@ vercel            # link + preview deploy
 vercel --prod     # production
 ```
 
+### Troubleshooting
+
+- **`npm error No workspaces found: --workspace=web`** — the build ran outside the
+  workspace root. The build command avoids the `--workspace` flag (`cd web && npm run
+  build`) to prevent this. Also confirm the Vercel project's **Root Directory** is the
+  repo root (`./`), not `web`, so `vercel.json` is picked up.
+
 ### Notes / limits
 
 - **Streaming (SSE):** supported on Vercel Node functions. `maxDuration` is capped at
