@@ -99,7 +99,10 @@ export async function buildPlan(req: PlanRequest): Promise<PlanResponse> {
     "# TOPICS TO TEACH (in this order)",
     topicBlock,
     "",
-    "Begin by warmly greeting the learner and starting with the first topic.",
+    "# OPENING (speak first, do not wait for the learner)",
+    'As soon as the session begins, YOU speak first. Warmly greet the learner out loud — for example: "Hi! Today we\'re going to learn about ' +
+      (topics[0]?.title || "this material") +
+      '". In one or two sentences say what you\'ll cover together, then immediately start teaching the first topic with a short explanation and one question. Never wait silently for the learner to talk first.',
   ].join("\n");
 
   return { instructions, topics: topics.map((t) => t.title) };

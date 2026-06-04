@@ -49,6 +49,7 @@ export class RealtimeClient {
   private buf = new Uint8Array(new ArrayBuffer(1024));
   private baseInstructions = "";
   private lastSteerAt = 0;
+  private openingRequested = false;
   private closed = false;
 
   constructor(private readonly cb: RealtimeCallbacks = {}) {}
@@ -83,6 +84,9 @@ export class RealtimeClient {
     const dc = pc.createDataChannel("oai-events");
     this.dc = dc;
     dc.addEventListener("message", (e) => this.handleEvent(String(e.data || "")));
+    // Make the tutor speak first: once the channel is open, ask for an opening
+    // response so the agent greets the learner instead of waiting for them.
+    dc.addEventListener("open", () => this.requestOpening());
 
     pc.addEventListener("connectionstatechange", () => {
       const state = pc.connectionState;
@@ -113,6 +117,13 @@ export class RealtimeClient {
 
   setMuted(muted: boolean): void {
     this.micStream?.getAudioTracks().forEach((t) => (t.enabled = !muted));
+  }
+
+  /** Ask the model to produce the opening greeting (agent speaks first). Fires once. */
+  private requestOpening(): void {
+    if (this.openingRequested) return;
+    this.openingRequested = true;
+    this.send({ type: "response.create" });
   }
 
   /** Sideband steer: re-inject instructions with a correction (cooldown-guarded). */

@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import { FileText, Plus, Loader2, X, Mic } from "lucide-react";
+import { FileText, Plus, Loader2, X, Mic, Trash2 } from "lucide-react";
 import { useDocentStore } from "@/store/useDocentStore";
 import { Button } from "@/components/ui/button";
 
@@ -10,6 +10,7 @@ export function UploadScreen() {
   const error = useDocentStore((s) => s.error);
   const addPdf = useDocentStore((s) => s.addPdf);
   const removeDoc = useDocentStore((s) => s.removeDoc);
+  const clearDocs = useDocentStore((s) => s.clearDocs);
   const startSession = useDocentStore((s) => s.startSession);
   const clearError = useDocentStore((s) => s.clearError);
 
@@ -47,10 +48,23 @@ export function UploadScreen() {
           </div>
         ))}
 
-        <Button variant="outline" disabled={busy} onClick={() => inputRef.current?.click()}>
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-          Add PDF{docs.length ? "s" : ""}
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            className="flex-1"
+            disabled={busy}
+            onClick={() => inputRef.current?.click()}
+          >
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+            Add PDF{docs.length ? "s" : ""}
+          </Button>
+          {docs.length > 0 && (
+            <Button variant="outline" disabled={busy} onClick={clearDocs} aria-label="Clear all documents">
+              <Trash2 className="h-4 w-4" />
+              Clear all
+            </Button>
+          )}
+        </div>
         <input
           ref={inputRef}
           type="file"

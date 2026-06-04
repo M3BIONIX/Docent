@@ -26,6 +26,7 @@ interface DocentState {
   init: () => Promise<void>;
   addPdf: (file: File) => Promise<void>;
   removeDoc: (id: string) => Promise<void>;
+  clearDocs: () => Promise<void>;
   startSession: () => Promise<void>;
   endSession: () => Promise<void>;
   clearError: () => void;
@@ -76,6 +77,11 @@ export const useDocentStore = create<DocentState>((set, get) => ({
   removeDoc: async (id) => {
     await db.documents.delete(id);
     set({ docs: await loadDocuments() });
+  },
+
+  clearDocs: async () => {
+    await db.documents.clear();
+    set({ docs: [], plan: null });
   },
 
   startSession: async () => {
