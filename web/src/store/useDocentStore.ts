@@ -1,175 +1,158 @@
 import { create } from "zustand";
-import { nanoid } from "nanoid";
-import {
-  db,
-  updateTopicScore,
-  type DocRecord,
-  type MessageRecord,
-  type TopicScoreRecord,
-} from "@/lib/db";
-import { embed, streamTurn, type TurnVerdict } from "@/lib/api";
-import { ingestPdf, retrieveContext } from "@/features/documents/ingest";
+import { loadDocuments, db, type DocRecord } from "@/lib/db";
+import { ingestPdf } from "@/features/documents/ingest";
+import { planCorpus, evaluate, type PlanResponse } from "@/lib/api";
+import { RealtimeClient } from "@/features/voice/realtime-client";
+
+export type Phase = "upload" | "preparing" | "ready" | "live" | "ended";
+
+interface TranscriptEntry {
+  role: "assistant" | "user";
+  text: string;
+}
 
 interface DocentState {
-  sessionId: string;
+  phase: Phase;
   docs: DocRecord[];
-  activeDocId: string | null;
-  messages: MessageRecord[];
-  scores: Record<string, TopicScoreRecord>;
-  streamingText: string;
+  plan: PlanResponse | null;
+  transcript: TranscriptEntry[];
+  understandingScore: number;
+  masteryReached: boolean;
+  rationale: string | null;
+  assistantSpeaking: boolean;
   busy: boolean;
   error: string | null;
 
   init: () => Promise<void>;
   addPdf: (file: File) => Promise<void>;
-  setActiveDoc: (docId: string) => Promise<void>;
-  sendMessage: (text: string) => Promise<void>;
-  beginSession: () => Promise<void>;
+  removeDoc: (id: string) => Promise<void>;
+  startSession: () => Promise<void>;
+  endSession: () => Promise<void>;
   clearError: () => void;
 }
 
-async function loadScores(): Promise<Record<string, TopicScoreRecord>> {
-  const all = await db.topicScores.toArray();
-  return Object.fromEntries(all.map((s) => [s.docId, s]));
+// The realtime client and an evaluate guard live outside React state (no re-renders).
+let client: RealtimeClient | null = null;
+let evaluating = false;
+
+/** Stable accessor for the orb's audio level. */
+export function getOrbLevel(): number {
+  return client?.getLevel() ?? 0;
+}
+
+/** Mute/unmute the microphone on the live session. */
+export function setMicMuted(muted: boolean): void {
+  client?.setMuted(muted);
 }
 
 export const useDocentStore = create<DocentState>((set, get) => ({
-  sessionId: nanoid(),
+  phase: "upload",
   docs: [],
-  activeDocId: null,
-  messages: [],
-  scores: {},
-  streamingText: "",
+  plan: null,
+  transcript: [],
+  understandingScore: 0,
+  masteryReached: false,
+  rationale: null,
+  assistantSpeaking: false,
   busy: false,
   error: null,
 
   init: async () => {
-    const docs = await db.documents.orderBy("order").toArray();
-    set({ docs, scores: await loadScores() });
+    set({ docs: await loadDocuments() });
   },
 
   addPdf: async (file) => {
     set({ busy: true, error: null });
     try {
-      const order = get().docs.length;
-      await ingestPdf(file, order);
-      const docs = await db.documents.orderBy("order").toArray();
-      set({ docs });
-    } catch (error) {
-      set({ error: error instanceof Error ? error.message : "Failed to process document" });
+      await ingestPdf(file, get().docs.length);
+      set({ docs: await loadDocuments() });
+    } catch (e) {
+      set({ error: e instanceof Error ? e.message : "Could not read that PDF" });
     } finally {
       set({ busy: false });
     }
   },
 
-  setActiveDoc: async (docId) => {
-    const messages = await db.messages.where("docId").equals(docId).sortBy("ts");
-    set({ activeDocId: docId, messages, streamingText: "" });
+  removeDoc: async (id) => {
+    await db.documents.delete(id);
+    set({ docs: await loadDocuments() });
   },
 
-  beginSession: async () => {
-    const { activeDocId, messages } = get();
-    if (!activeDocId || messages.length > 0) return;
-    await get().sendMessage("I'm ready. Please start teaching me this document.");
-  },
+  startSession: async () => {
+    const docs = get().docs;
+    if (docs.length === 0 || get().busy) return;
 
-  sendMessage: async (text) => {
-    const { activeDocId, sessionId } = get();
-    if (!activeDocId || !text.trim() || get().busy) return;
-
-    const docId = activeDocId;
-    const intent = await db.intents.get(docId);
-    if (!intent) {
-      set({ error: "Document is still being prepared." });
-      return;
-    }
-
-    set({ busy: true, error: null, streamingText: "" });
-
-    // persist + show the user's message
-    const userMsg: MessageRecord = {
-      id: nanoid(),
-      sessionId,
-      docId,
-      role: "user",
-      text: text.trim(),
-      ts: Date.now(),
-    };
-    await db.messages.put(userMsg);
-    set({ messages: [...get().messages, userMsg] });
+    set({ phase: "preparing", busy: true, error: null, transcript: [], understandingScore: 0, masteryReached: false, rationale: null });
 
     try {
-      // RAG retrieval (client-side): embed the query, cosine top-k over this doc's chunks
-      const [queryVector] = await embed([text.trim()]);
-      const context = queryVector ? await retrieveContext(docId, queryVector, 4) : [];
+      // 1. Build the whole-corpus teaching brief from ALL docs.
+      const plan = await planCorpus(docs.map((d) => ({ title: d.title, text: d.text })));
+      set({ plan });
 
-      const history = get()
-        .messages.slice(-10)
-        .map((m) => ({ role: m.role, text: m.text }));
-
-      let verdict: TurnVerdict | null = null;
-      let advance = false;
-      let acc = "";
-
-      await streamTurn(
-        {
-          sessionId,
-          docId,
-          intent: { summary: intent.intentSummary, openingQuestion: intent.openingQuestion },
-          history,
-          latestUserMessage: text.trim(),
-          context,
+      // 2. Connect the voice session.
+      client = new RealtimeClient({
+        onConnected: () => set({ phase: "live" }),
+        onDisconnected: () => {
+          if (get().phase === "live") set({ phase: "ended" });
         },
-        {
-          onVerdict: (v) => {
-            verdict = v;
-          },
-          onToken: (delta) => {
-            acc += delta;
-            set({ streamingText: acc });
-          },
-          onDone: (info) => {
-            advance = info.advanceToNextDoc;
-          },
-          onError: (err) => {
-            set({ error: `${err.code}: ${err.message}` });
-          },
+        onError: (message) => set({ error: message }),
+        onSpeakingChange: (speaking) => set({ assistantSpeaking: speaking }),
+        onAssistantTranscript: (text) => {
+          set({ transcript: [...get().transcript, { role: "assistant", text }] });
         },
-      );
+        onUserTranscript: (text) => {
+          set({ transcript: [...get().transcript, { role: "user", text }] });
+          void runEvaluation(set, get);
+        },
+        onEndSession: () => void get().endSession(),
+      });
 
-      if (acc.trim()) {
-        const assistantMsg: MessageRecord = {
-          id: nanoid(),
-          sessionId,
-          docId,
-          role: "assistant",
-          text: acc.trim(),
-          ts: Date.now(),
-        };
-        await db.messages.put(assistantMsg);
-        set({ messages: [...get().messages, assistantMsg], streamingText: "" });
-      }
-
-      if (verdict) {
-        await updateTopicScore(docId, (verdict as TurnVerdict).understandingScore);
-      }
-      if (advance) {
-        const existing = await db.topicScores.get(docId);
-        await db.topicScores.put({
-          docId,
-          understanding: existing?.understanding ?? 80,
-          turns: existing?.turns ?? 1,
-          mastered: true,
-          updatedAt: Date.now(),
-        });
-      }
-      set({ scores: await loadScores() });
-    } catch (error) {
-      set({ error: error instanceof Error ? error.message : "Turn failed" });
+      await client.start(plan.instructions);
+    } catch (e) {
+      set({ phase: "ready", error: e instanceof Error ? e.message : "Could not start the session" });
     } finally {
       set({ busy: false });
     }
+  },
+
+  endSession: async () => {
+    await client?.stop();
+    client = null;
+    set({ phase: "ended", assistantSpeaking: false });
   },
 
   clearError: () => set({ error: null }),
 }));
+
+/**
+ * Sideband evaluation: after each learner turn, score understanding globally and
+ * steer the agent if the learner is drifting. One evaluation in flight at a time.
+ */
+async function runEvaluation(
+  set: (partial: Partial<DocentState>) => void,
+  get: () => DocentState,
+) {
+  if (evaluating) return;
+  evaluating = true;
+  try {
+    const { transcript, plan, understandingScore } = get();
+    const result = await evaluate({
+      transcript,
+      topics: plan?.topics ?? [],
+      priorScore: understandingScore,
+    });
+    set({
+      understandingScore: result.understandingScore,
+      masteryReached: result.masteryReached,
+      rationale: result.rationale,
+    });
+    if (!result.onTrack && (result.realignmentNote || result.nextProbe)) {
+      const correction = [result.realignmentNote, result.nextProbe].filter(Boolean).join(" ");
+      client?.steer(correction);
+    }
+  } catch {
+    /* transient; next turn will re-evaluate */
+  } finally {
+    evaluating = false;
+  }
+}

@@ -12,21 +12,21 @@ describe("HTTP surface", () => {
     expect(typeof res.body.uptime).toBe("number");
   });
 
-  it("POST /api/embed rejects an empty body (zod 400)", async () => {
-    const res = await request(app).post("/api/embed").send({});
+  it("POST /api/plan rejects empty docs (zod 400)", async () => {
+    const res = await request(app).post("/api/plan").send({ docs: [] });
     expect(res.status).toBe(400);
     expect(res.body.code).toBe("VALIDATION_ERROR");
   });
 
-  it("POST /api/embed rejects an empty texts array", async () => {
-    const res = await request(app).post("/api/embed").send({ texts: [] });
+  it("POST /api/evaluate rejects an out-of-range priorScore (zod 400)", async () => {
+    // keep the suite offline: send an invalid body so it fails validation
+    // before reaching the OpenAI-backed service.
+    const res = await request(app).post("/api/evaluate").send({ priorScore: 200 });
     expect(res.status).toBe(400);
   });
 
-  it("POST /api/turn rejects a missing latestUserMessage (zod 400)", async () => {
-    const res = await request(app)
-      .post("/api/turn")
-      .send({ sessionId: "s", docId: "d", intent: { summary: "x" }, history: [] });
+  it("POST /api/realtime/session rejects a missing sdp (zod 400)", async () => {
+    const res = await request(app).post("/api/realtime/session").send({ instructions: "teach" });
     expect(res.status).toBe(400);
   });
 });

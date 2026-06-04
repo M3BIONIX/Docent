@@ -1,9 +1,8 @@
-import { DEFAULT_TURN_EVALUATION, type TurnEvaluation } from "./evaluator.types.js";
-
 /**
- * Loose, defensive parsing of the model's JSON verdict.
+ * Loose, defensive parsing primitives for model JSON output.
  * Ported from predint's evaluator: tolerant of fenced code blocks, loose
  * booleans ("yes"/"1"/"on"), and null-ish text ("none"/"n/a").
+ * Shared by /api/plan and /api/evaluate.
  */
 
 export function normalizeLooseBoolean(value: unknown, fallback: boolean): boolean {
@@ -48,26 +47,4 @@ export function extractJsonObjectString(rawText: string): string | null {
   const end = candidate.lastIndexOf("}");
   if (start === -1 || end === -1 || end <= start) return null;
   return candidate.slice(start, end + 1);
-}
-
-export function normalizeEvaluationObject(value: unknown): TurnEvaluation {
-  if (!value || typeof value !== "object") return DEFAULT_TURN_EVALUATION;
-  const o = value as Record<string, unknown>;
-  return {
-    onTrack: normalizeLooseBoolean(o.onTrack, DEFAULT_TURN_EVALUATION.onTrack),
-    shouldEnd: normalizeLooseBoolean(o.shouldEnd, DEFAULT_TURN_EVALUATION.shouldEnd),
-    realignmentNote: normalizeLooseText(o.realignmentNote, 220),
-    nextBestQuestion: normalizeLooseText(o.nextBestQuestion, 240),
-    understandingScore: normalizeScore(o.understandingScore),
-  };
-}
-
-export function parseEvaluationResponse(rawText: string): TurnEvaluation {
-  const json = extractJsonObjectString(rawText);
-  if (!json) return DEFAULT_TURN_EVALUATION;
-  try {
-    return normalizeEvaluationObject(JSON.parse(json));
-  } catch {
-    return DEFAULT_TURN_EVALUATION;
-  }
 }

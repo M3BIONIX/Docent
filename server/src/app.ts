@@ -1,8 +1,9 @@
 import express, { type Express, Router } from "express";
 import cors from "cors";
 import { env } from "./config/env.js";
-import { embedRouter } from "./modules/embed/embed.controller.js";
-import { turnRouter } from "./modules/turn/turn.controller.js";
+import { planRouter } from "./modules/plan/plan.controller.js";
+import { evaluateRouter } from "./modules/evaluate/evaluate.controller.js";
+import { realtimeRouter } from "./modules/realtime/realtime.controller.js";
 import { errorHandler } from "./middleware/error.middleware.js";
 
 /**
@@ -27,8 +28,9 @@ export function createApp(): Express {
     res.json({ status: "ok", uptime: process.uptime(), openai: Boolean(env.OPENAI_API_KEY) });
   });
 
-  api.use("/embed", embedRouter);
-  api.use("/turn", turnRouter);
+  api.use("/plan", planRouter);
+  api.use("/evaluate", evaluateRouter);
+  api.use("/realtime", realtimeRouter);
 
   app.use("/api", api);
 

@@ -1,13 +1,12 @@
 import { useEffect } from "react";
 import { GraduationCap } from "lucide-react";
 import { useDocentStore } from "@/store/useDocentStore";
-import { DocumentsPanel } from "@/features/documents/DocumentsPanel";
-import { DocViewer } from "@/features/documents/DocViewer";
-import { ChatPanel } from "@/features/chat/ChatPanel";
-import { ScorePanel } from "@/features/progress/ScorePanel";
+import { UploadScreen } from "@/features/documents/UploadScreen";
+import { SessionScreen } from "@/features/voice/SessionScreen";
 
 export default function App() {
   const init = useDocentStore((s) => s.init);
+  const phase = useDocentStore((s) => s.phase);
 
   useEffect(() => {
     void init();
@@ -18,26 +17,11 @@ export default function App() {
       <header className="flex items-center gap-2 border-b border-border px-4 py-3">
         <GraduationCap className="h-5 w-5" />
         <h1 className="text-sm font-semibold tracking-tight">Docent</h1>
-        <span className="text-xs text-muted-foreground">learn from your documents</span>
+        <span className="text-xs text-muted-foreground">learn your documents by voice</span>
       </header>
-
-      <div className="grid flex-1 grid-cols-[260px_1fr_360px] overflow-hidden">
-        {/* Left: documents + progress */}
-        <aside className="flex flex-col gap-6 overflow-hidden border-r border-border p-4">
-          <DocumentsPanel />
-          <ScorePanel />
-        </aside>
-
-        {/* Middle: the document reading pane */}
-        <main className="overflow-hidden border-r border-border">
-          <DocViewer />
-        </main>
-
-        {/* Right: the tutor chat */}
-        <section className="overflow-hidden">
-          <ChatPanel />
-        </section>
-      </div>
+      <main className="min-h-0 flex-1">
+        {phase === "upload" ? <UploadScreen /> : <SessionScreen />}
+      </main>
     </div>
   );
 }
