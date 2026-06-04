@@ -7,6 +7,19 @@ import { realtimeSessionRequestSchema, type RealtimeSessionRequest } from "./rea
 
 export const realtimeRouter = Router();
 
+/** Diagnostic: confirms the configured realtime model exists for this key. */
+realtimeRouter.get("/diag", async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!env.OPENAI_API_KEY) throw new OpenAiNotConfiguredError();
+    const r = await fetch(`https://api.openai.com/v1/models/${env.REALTIME_MODEL}`, {
+      headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}` },
+    });
+    res.json({ model: env.REALTIME_MODEL, exists: r.ok, status: r.status });
+  } catch (error) {
+    next(error);
+  }
+});
+
 /**
  * SDP proxy for OpenAI Realtime (voice). The browser does the WebRTC handshake;
  * this endpoint forwards the offer to OpenAI with the teaching session config and
@@ -40,7 +53,18 @@ realtimeRouter.post(
 
       const answerSdp = await response.text();
       if (!response.ok) {
-        return res.status(response.status).json({ code: "REALTIME_NEGOTIATION_FAILED", detail: answerSdp });
+        // Surface OpenAI's actual error (e.g. invalid model, invalid voice) so
+        // the browser can show something actionable instead of a generic break.
+        let message = answerSdp;
+        try {
+          message = JSON.parse(answerSdp)?.error?.message ?? answerSdp;
+        } catch {
+          /* not JSON; keep raw */
+        }
+        console.error("[realtime] negotiation failed", { status: response.status, message });
+        return res
+          .status(response.status === 401 ? 502 : response.status)
+          .json({ code: "REALTIME_NEGOTIATION_FAILED", message });
       }
 
       res.type("application/sdp").send(answerSdp);

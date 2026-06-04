@@ -4,7 +4,7 @@ import { ingestPdf } from "@/features/documents/ingest";
 import { planCorpus, evaluate, type PlanResponse } from "@/lib/api";
 import { RealtimeClient } from "@/features/voice/realtime-client";
 
-export type Phase = "upload" | "preparing" | "ready" | "live" | "ended";
+export type Phase = "upload" | "preparing" | "live" | "ended";
 
 interface TranscriptEntry {
   role: "assistant" | "user";
@@ -93,7 +93,13 @@ export const useDocentStore = create<DocentState>((set, get) => ({
       client = new RealtimeClient({
         onConnected: () => set({ phase: "live" }),
         onDisconnected: () => {
-          if (get().phase === "live") set({ phase: "ended" });
+          // Live -> ended is a normal finish. Failing before we ever connected
+          // (still "preparing") means the connection broke: go back to upload
+          // with the error visible instead of stranding the user on a dead orb.
+          const phase = get().phase;
+          if (phase === "live") set({ phase: "ended" });
+          else if (phase === "preparing")
+            set({ phase: "upload", error: get().error ?? "Voice connection failed. Check microphone permissions and try again." });
         },
         onError: (message) => set({ error: message }),
         onSpeakingChange: (speaking) => set({ assistantSpeaking: speaking }),
@@ -109,7 +115,10 @@ export const useDocentStore = create<DocentState>((set, get) => ({
 
       await client.start(plan.instructions);
     } catch (e) {
-      set({ phase: "ready", error: e instanceof Error ? e.message : "Could not start the session" });
+      // Go back to the upload screen with a visible error rather than a dead session screen.
+      await client?.stop().catch(() => undefined);
+      client = null;
+      set({ phase: "upload", error: e instanceof Error ? e.message : "Could not start the session" });
     } finally {
       set({ busy: false });
     }

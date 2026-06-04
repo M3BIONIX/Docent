@@ -18,7 +18,7 @@ const envSchema = z.object({
   EMBEDDING_MODEL: z.string().default("text-embedding-3-small"),
   PLAN_MODEL: z.string().default("gpt-4o-mini"),
   // OpenAI Realtime (voice) — used by the SDP proxy in /api/realtime/session
-  REALTIME_MODEL: z.string().default("gpt-realtime"),
+  REALTIME_MODEL: z.string().default("gpt-realtime-2"),
   REALTIME_VOICE: z.string().default("cedar"),
   REALTIME_TRANSCRIBE_MODEL: z.string().default("gpt-4o-mini-transcribe"),
 });

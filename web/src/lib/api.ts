@@ -59,7 +59,13 @@ export async function negotiateRealtime(sdp: string, instructions: string): Prom
   });
   const text = await res.text();
   if (!res.ok) {
-    throw new Error(`Realtime negotiation failed (${res.status}): ${text.slice(0, 200)}`);
+    let message = text.slice(0, 300);
+    try {
+      message = JSON.parse(text)?.message ?? message;
+    } catch {
+      /* not JSON */
+    }
+    throw new Error(message || `Realtime negotiation failed (${res.status})`);
   }
   return text;
 }
