@@ -1,0 +1,47 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Strict black & white. Light = white bg / black ink. Dark = black bg / white ink. */
+:root {
+  --background: 0 0% 100%;
+  --foreground: 0 0% 4%;
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 4%;
+  --muted: 0 0% 96%;
+  --muted-foreground: 0 0% 40%;
+  --border: 0 0% 88%;
+  --primary: 0 0% 4%;
+  --primary-foreground: 0 0% 100%;
+  --radius: 0.5rem;
+}
+
+.dark {
+  --background: 0 0% 4%;
+  --foreground: 0 0% 98%;
+  --card: 0 0% 7%;
+  --card-foreground: 0 0% 98%;
+  --muted: 0 0% 14%;
+  --muted-foreground: 0 0% 64%;
+  --border: 0 0% 20%;
+  --primary: 0 0% 98%;
+  --primary-foreground: 0 0% 4%;
+}
+
+* {
+  border-color: hsl(var(--border));
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
