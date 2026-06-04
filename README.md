@@ -55,6 +55,47 @@ npm run test
 npm run build
 ```
 
+## Deploy to Vercel
+
+One Vercel project serves both the SPA and the API:
+
+- The Vite app builds to `web/dist` and is served as static files.
+- The Express app runs as a **serverless function** at `api/[...path].ts` — every
+  `/api/*` request is routed into it. (Vercel does not run `app.listen()`; the
+  function exports the Express app as a request handler.) `server/src/index.ts` is
+  only used for local `npm run dev`.
+- The client calls `/api/*` same-origin, so there is no CORS config to manage in prod.
+
+Config lives in [`vercel.json`](vercel.json): build command, static output, the
+function's `maxDuration: 60` (teaching turns stream an LLM reply), and the SPA
+fallback rewrite.
+
+### Steps
+
+1. Push this repo to GitHub (already at `M3BIONIX/Docent`).
+2. In Vercel: **New Project → import the repo.** The settings in `vercel.json` are
+   picked up automatically (framework preset: Other).
+3. Add environment variables (Project → Settings → Environment Variables):
+   - `OPENAI_API_KEY` — **required** for `/api/embed` and `/api/turn`.
+   - `EVALUATOR_MODEL`, `RESPONSE_MODEL`, `EMBEDDING_MODEL` — optional overrides.
+   - Leave `VITE_API_ORIGIN` unset (same-origin).
+4. Deploy. Verify: `https://<your-app>.vercel.app/api/health` → `{"status":"ok"}`.
+
+Or via CLI:
+
+```bash
+npm i -g vercel
+vercel            # link + preview deploy
+vercel --prod     # production
+```
+
+### Notes / limits
+
+- **Streaming (SSE):** supported on Vercel Node functions. `maxDuration` is capped at
+  60s on Hobby (300s on Pro) — long teaching turns must finish within that window.
+- **Stateless by design:** no server DB, so there is nothing to provision. All user
+  state stays in the browser (Dexie/IndexedDB), which suits Vercel's serverless model.
+
 ## What's intentionally out of MVP scope
 
 - The heavy memory/cognitive layer (HyperMem / AOLM / knowledge graph) — the evaluator

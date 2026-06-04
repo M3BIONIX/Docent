@@ -1,4 +1,8 @@
-const API_ORIGIN = import.meta.env.VITE_API_ORIGIN ?? "http://localhost:4000";
+// Same-origin by default ("" -> "/api"), which is what Vercel needs (the SPA and
+// the serverless function share an origin). In local dev the Vite proxy forwards
+// /api to the standalone server on :4000. Override with VITE_API_ORIGIN only to
+// point at a backend on a different host.
+const API_BASE = `${import.meta.env.VITE_API_ORIGIN ?? ""}/api`;
 
 export interface TurnVerdict {
   onTrack: boolean;
@@ -26,7 +30,7 @@ export interface TurnHandlers {
 
 /** POST /embed — returns one vector per input text, in order. */
 export async function embed(texts: string[]): Promise<number[][]> {
-  const res = await fetch(`${API_ORIGIN}/embed`, {
+  const res = await fetch(`${API_BASE}/embed`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ texts }),
@@ -48,7 +52,7 @@ export async function streamTurn(
   handlers: TurnHandlers,
   signal?: AbortSignal,
 ): Promise<void> {
-  const res = await fetch(`${API_ORIGIN}/turn`, {
+  const res = await fetch(`${API_BASE}/turn`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),

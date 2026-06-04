@@ -10,3 +10,4 @@ coverage/
 web/dist/
 server/dist/
 *.tsbuildinfo
+.vercel/
