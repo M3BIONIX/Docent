@@ -11,9 +11,5 @@
  */
 import { createApp } from "../server/src/app.js";
 
-export const config = {
-  runtime: "nodejs",
-  maxDuration: 60, // teaching turns stream an LLM reply; allow up to 60s
-};
-
+// maxDuration is configured in vercel.json (functions). Node is the default runtime.
 export default createApp();

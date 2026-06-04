@@ -1,6 +1,9 @@
 import { evaluateTurn } from "../../services/evaluator/evaluator.service.js";
 import { streamResponse } from "../../services/response/response.service.js";
-import type { TurnEvaluation } from "../../services/evaluator/evaluator.types.js";
+import type {
+  EvaluatorHistoryEntry,
+  TurnEvaluation,
+} from "../../services/evaluator/evaluator.types.js";
 import { InterventionTracker, interventionTracker } from "./intervention-tracker.js";
 import type { TurnRequest } from "./turn.dto.js";
 
@@ -60,10 +63,17 @@ export async function runTurn(
     openingQuestion: req.intent.openingQuestion,
   };
 
+  // Normalize history to the strict evaluator shape (the zod .default([]) makes
+  // entry fields look optional to some type-checkers; coerce explicitly).
+  const history: EvaluatorHistoryEntry[] = req.history.map((h) => ({
+    role: h.role === "assistant" ? "assistant" : "user",
+    text: h.text ?? "",
+  }));
+
   const evaluation = await evaluateTurn({
     intent,
     latestUserMessage: req.latestUserMessage,
-    history: req.history,
+    history,
     context: req.context,
   });
 
@@ -75,7 +85,7 @@ export async function runTurn(
   const stream = streamResponse({
     intent,
     evaluation: effective,
-    history: req.history,
+    history,
     latestUserMessage: req.latestUserMessage,
     context: req.context,
   });

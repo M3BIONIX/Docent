@@ -2,6 +2,7 @@
   "name": "docent",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "description": "Document-driven teaching + understanding-evaluation agent",
   "workspaces": [
     "server",
