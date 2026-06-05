@@ -1,9 +1,11 @@
 import express, { type Express, Router } from "express";
 import cors from "cors";
 import { env } from "./config/env.js";
-import { planRouter } from "./modules/plan/plan.controller.js";
 import { evaluateRouter } from "./modules/evaluate/evaluate.controller.js";
 import { realtimeRouter } from "./modules/realtime/realtime.controller.js";
+import { adminRouter } from "./modules/admin/admin.controller.js";
+import { meRouter, sessionRouter } from "./modules/session/session.controller.js";
+import { requireAuth, requireAdmin } from "./middleware/auth.middleware.js";
 import { errorHandler } from "./middleware/error.middleware.js";
 
 /**
@@ -25,12 +27,22 @@ export function createApp(): Express {
   const api = Router();
 
   api.get("/health", (_req, res) => {
-    res.json({ status: "ok", uptime: process.uptime(), openai: Boolean(env.OPENAI_API_KEY) });
+    res.json({
+      status: "ok",
+      uptime: process.uptime(),
+      openai: Boolean(env.OPENAI_API_KEY),
+      db: Boolean(env.DATABASE_URL),
+    });
   });
 
-  api.use("/plan", planRouter);
-  api.use("/evaluate", evaluateRouter);
-  api.use("/realtime", realtimeRouter);
+  // Learner (any authenticated user)
+  api.use("/me", requireAuth, meRouter);
+  api.use("/session", requireAuth, sessionRouter);
+  api.use("/evaluate", requireAuth, evaluateRouter);
+  api.use("/realtime", requireAuth, realtimeRouter);
+
+  // Admin only
+  api.use("/admin", requireAuth, requireAdmin, adminRouter);
 
   app.use("/api", api);
 

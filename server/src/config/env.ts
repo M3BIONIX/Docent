@@ -21,6 +21,11 @@ const envSchema = z.object({
   REALTIME_MODEL: z.string().default("gpt-realtime-2"),
   REALTIME_VOICE: z.string().default("cedar"),
   REALTIME_TRANSCRIBE_MODEL: z.string().default("gpt-4o-mini-transcribe"),
+  // Supabase (v3 multi-user). Direct Postgres connection string for all DB access;
+  // Supabase URL + publishable key for verifying user JWTs.
+  DATABASE_URL: z.string().min(1).optional(),
+  SUPABASE_URL: z.string().min(1).optional(),
+  SUPABASE_PUBLISHABLE_KEY: z.string().min(1).optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

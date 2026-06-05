@@ -5,28 +5,27 @@ import { createApp } from "../src/app.js";
 const app = createApp();
 
 describe("HTTP surface", () => {
-  it("GET /api/health returns ok", async () => {
+  it("GET /api/health returns ok (public)", async () => {
     const res = await request(app).get("/api/health");
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("ok");
     expect(typeof res.body.uptime).toBe("number");
   });
 
-  it("POST /api/plan rejects empty docs (zod 400)", async () => {
-    const res = await request(app).post("/api/plan").send({ docs: [] });
-    expect(res.status).toBe(400);
-    expect(res.body.code).toBe("VALIDATION_ERROR");
+  it("protected routes reject requests without a bearer token (401)", async () => {
+    for (const r of [
+      request(app).get("/api/me"),
+      request(app).post("/api/session/start"),
+      request(app).post("/api/evaluate").send({ topics: ["a"] }),
+      request(app).get("/api/admin/users"),
+    ]) {
+      const res = await r;
+      expect(res.status).toBe(401);
+    }
   });
 
-  it("POST /api/evaluate rejects an out-of-range priorScore (zod 400)", async () => {
-    // keep the suite offline: send an invalid body so it fails validation
-    // before reaching the OpenAI-backed service.
-    const res = await request(app).post("/api/evaluate").send({ priorScore: 200 });
-    expect(res.status).toBe(400);
-  });
-
-  it("POST /api/realtime/session rejects a missing sdp (zod 400)", async () => {
-    const res = await request(app).post("/api/realtime/session").send({ instructions: "teach" });
-    expect(res.status).toBe(400);
+  it("admin route rejects an invalid token (401)", async () => {
+    const res = await request(app).get("/api/admin/users").set("Authorization", "Bearer not-a-real-token");
+    expect(res.status).toBe(401);
   });
 });
