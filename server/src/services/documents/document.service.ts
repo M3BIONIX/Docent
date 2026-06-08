@@ -1,7 +1,7 @@
 import { embedMany } from "ai";
 import { embeddingModel } from "../openai/openai.factory.js";
-import { query } from "../db/pool.js";
-import { chunkText, toVectorLiteral } from "./chunk.js";
+import { getPool, query } from "../db/pool.js";
+import { chunkText, toVectorLiteral, sanitizeText } from "./chunk.js";
 
 export interface DocumentRow {
   id: string;
@@ -16,30 +16,50 @@ export async function createDocument(input: {
   text: string;
   createdBy: string;
 }): Promise<DocumentRow> {
-  const doc = await query<{ id: string; title: string; created_at: string }>(
-    "insert into public.documents (title, text, created_by) values ($1,$2,$3) returning id, title, created_at",
-    [input.title, input.text, input.createdBy],
-  );
-  const documentId = doc.rows[0]!.id;
+  // PDF-extracted text can contain NUL/control bytes that Postgres text columns
+  // reject (causing a 500). Sanitize before storing or embedding.
+  const title = sanitizeText(input.title).trim() || "Untitled";
+  const text = sanitizeText(input.text);
 
-  const chunks = chunkText(input.text);
-  if (chunks.length > 0) {
-    const { embeddings } = await embedMany({ model: embeddingModel(), values: chunks });
-    // bulk insert chunks with their vectors
-    const values: string[] = [];
-    const params: unknown[] = [];
-    chunks.forEach((content, i) => {
-      const base = i * 4;
-      values.push(`($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}::vector)`);
-      params.push(documentId, i, content, toVectorLiteral(embeddings[i]!));
-    });
-    await query(
-      `insert into public.document_chunks (document_id, idx, content, embedding) values ${values.join(",")}`,
-      params,
+  // Embed first (the slow, failure-prone step) so the transaction stays short.
+  const chunks = chunkText(text);
+  const embeddings = chunks.length
+    ? (await embedMany({ model: embeddingModel(), values: chunks })).embeddings
+    : [];
+
+  // Doc + chunks in ONE transaction: a failure can't leave an orphan doc (a row
+  // with no embedded chunks). Rolls back on any error.
+  const client = await getPool().connect();
+  try {
+    await client.query("begin");
+    const doc = await client.query<{ id: string; title: string; created_at: string }>(
+      "insert into public.documents (title, text, created_by) values ($1,$2,$3) returning id, title, created_at",
+      [title, text, input.createdBy],
     );
-  }
+    const documentId = doc.rows[0]!.id;
 
-  return doc.rows[0]!;
+    if (chunks.length > 0) {
+      const values: string[] = [];
+      const params: unknown[] = [];
+      chunks.forEach((content, i) => {
+        const base = i * 4;
+        values.push(`($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}::vector)`);
+        params.push(documentId, i, content, toVectorLiteral(embeddings[i]!));
+      });
+      await client.query(
+        `insert into public.document_chunks (document_id, idx, content, embedding) values ${values.join(",")}`,
+        params,
+      );
+    }
+
+    await client.query("commit");
+    return doc.rows[0]!;
+  } catch (e) {
+    await client.query("rollback");
+    throw e;
+  } finally {
+    client.release();
+  }
 }
 
 export async function listDocuments(): Promise<DocumentRow[]> {
