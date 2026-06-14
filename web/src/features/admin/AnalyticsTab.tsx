@@ -1,21 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  CartesianGrid,
-  RadialBarChart,
-  RadialBar,
-  PieChart,
-  Pie,
-  Cell,
-} from "recharts";
-import { User, CheckCircle2 } from "lucide-react";
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
+import { Check } from "lucide-react";
 import {
   adminListUsers,
   adminGetUserSessions,
@@ -28,6 +13,12 @@ import { cn } from "@/lib/utils";
 
 const FG = "hsl(var(--foreground))";
 const MUTED = "hsl(var(--muted-foreground))";
+
+function initials(u: AdminUser): string {
+  const base = (u.name || u.email).trim();
+  const parts = base.split(/[\s@.]+/).filter(Boolean);
+  return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase() || base.slice(0, 2).toUpperCase();
+}
 
 export function AnalyticsTab() {
   const [learners, setLearners] = useState<AdminUser[]>([]);
@@ -59,187 +50,141 @@ export function AnalyticsTab() {
   const best = completed.reduce((a, s) => Math.max(a, s.final_score ?? 0), 0);
   const masteryCount = sessions.filter((s) => s.mastery).length;
 
-  const perSession = useMemo(
-    () =>
-      [...completed]
-        .reverse()
-        .map((s, i) => ({ name: `#${i + 1}`, score: s.final_score ?? 0 })),
+  const trend = useMemo(
+    () => [...completed].reverse().map((s, i) => ({ name: `#${i + 1}`, score: s.final_score ?? 0 })),
     [completed],
   );
 
-  const scoreOverTime = useMemo(
-    () => (detail?.scoreSeries ?? []).map((p, i) => ({ name: `${i + 1}`, score: p.score })),
-    [detail],
-  );
-
   return (
-    <div className="grid grid-cols-[200px_1fr] gap-6">
+    <div className="flex gap-8">
       {/* learner picker */}
-      <div className="flex flex-col divide-y divide-border rounded-md border border-border">
+      <div className="flex w-[220px] shrink-0 flex-col gap-0.5">
         {learners.length === 0 && (
-          <p className="px-3 py-6 text-center text-xs text-muted-foreground">No learners.</p>
+          <p className="px-3 py-8 text-center text-[13px] text-muted-foreground">No learners.</p>
         )}
         {learners.map((l) => (
           <button
             key={l.id}
             onClick={() => setUserId(l.id)}
             className={cn(
-              "flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted",
+              "flex h-12 items-center gap-3 rounded-md px-2.5 text-left transition-colors hover:bg-muted",
               userId === l.id && "bg-muted",
             )}
           >
-            <User className="h-4 w-4 text-muted-foreground" />
-            <span className="flex-1 truncate">{l.name || l.email}</span>
-            <span className="text-[11px] text-muted-foreground">{l.session_count}</span>
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-foreground text-[11px] font-medium text-background">
+              {initials(l)}
+            </div>
+            <span className="flex-1 truncate text-sm">{l.name || l.email}</span>
           </button>
         ))}
       </div>
 
       {/* dashboard */}
-      <div className="flex flex-col gap-5">
+      <div className="flex flex-1 flex-col gap-5">
+        <div className="flex flex-col gap-1">
+          <h2 className="text-xl font-medium">Understanding</h2>
+          <p className="text-[13px] text-muted-foreground">
+            How well learners can explain their material back
+          </p>
+        </div>
+
         {!userId ? (
-          <p className="rounded-md border border-dashed border-border px-3 py-10 text-center text-xs text-muted-foreground">
+          <p className="rounded-lg border border-dashed border-border px-3 py-10 text-center text-[13px] text-muted-foreground">
             Select a learner to see their understanding.
           </p>
         ) : sessions.length === 0 ? (
-          <p className="rounded-md border border-dashed border-border px-3 py-10 text-center text-xs text-muted-foreground">
+          <p className="rounded-lg border border-dashed border-border px-3 py-10 text-center text-[13px] text-muted-foreground">
             This learner has not completed any sessions yet.
           </p>
         ) : (
           <>
-            {/* summary cards */}
             <div className="grid grid-cols-4 gap-3">
+              <Stat label="Avg understanding" value={avg} />
+              <Stat label="Best session" value={best} />
               <Stat label="Sessions" value={sessions.length} />
-              <Stat label="Avg score" value={avg} />
-              <Stat label="Best" value={best} />
-              <Stat label="Mastered" value={masteryCount} icon />
+              <Stat label="Mastered" value={masteryCount} />
             </div>
 
-            {/* score across sessions */}
-            <Card title="Final score by session">
-              <ResponsiveContainer width="100%" height={180}>
-                <BarChart data={perSession}>
+            <div className="flex flex-col gap-4 rounded-lg border border-border p-5">
+              <div className="flex items-baseline justify-between">
+                <span className="text-[15px] font-medium">Understanding over time</span>
+                <span className="text-[13px] text-muted-foreground">Last {completed.length} sessions</span>
+              </div>
+              <ResponsiveContainer width="100%" height={200}>
+                <AreaChart data={trend}>
+                  <defs>
+                    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={FG} stopOpacity={0.18} />
+                      <stop offset="100%" stopColor={FG} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                   <XAxis dataKey="name" stroke={MUTED} fontSize={11} />
                   <YAxis domain={[0, 100]} stroke={MUTED} fontSize={11} width={28} />
                   <Tooltip {...tooltip} />
-                  <Bar dataKey="score" fill={FG} radius={[4, 4, 0, 0]} />
-                </BarChart>
+                  <Area type="monotone" dataKey="score" stroke={FG} strokeWidth={2.5} fill="url(#g)" />
+                </AreaChart>
               </ResponsiveContainer>
-            </Card>
+            </div>
 
-            {/* session selector */}
-            <div className="flex flex-wrap gap-2">
+            {/* session list */}
+            <div className="overflow-hidden rounded-lg border border-border">
+              <div className="flex h-11 items-center bg-muted/60 px-4 text-xs text-muted-foreground">
+                <span className="flex-1">Session</span>
+                <span className="w-[160px]">Understanding</span>
+                <span className="w-[120px]">Result</span>
+              </div>
               {sessions.map((s, i) => (
                 <button
                   key={s.id}
                   onClick={() => setSessionId(s.id)}
                   className={cn(
-                    "rounded-md border border-border px-3 py-1.5 text-xs",
-                    sessionId === s.id ? "bg-foreground text-background" : "hover:bg-muted",
+                    "flex h-[52px] w-full items-center px-4 text-left",
+                    i > 0 && "border-t border-border/60",
+                    sessionId === s.id && "bg-muted",
                   )}
                 >
-                  Session {sessions.length - i} · {s.final_score ?? "–"}
-                  {s.mastery && " ★"}
+                  <span className="flex-1 text-sm font-medium">Session {sessions.length - i}</span>
+                  <div className="flex w-[160px] items-center gap-3 pr-6">
+                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                      <div className="h-full rounded-full bg-foreground" style={{ width: `${s.final_score ?? 0}%` }} />
+                    </div>
+                    <span className="w-8 text-right text-[13px] text-muted-foreground">{s.final_score ?? "–"}</span>
+                  </div>
+                  <span className="flex w-[120px] items-center gap-1.5 text-[13px]">
+                    {s.mastery ? (
+                      <>
+                        <Check className="h-3.5 w-3.5" /> Mastered
+                      </>
+                    ) : (
+                      <span className="text-muted-foreground">In progress</span>
+                    )}
+                  </span>
                 </button>
               ))}
             </div>
 
             {/* selected session detail */}
-            {detail && (
-              <div className="grid grid-cols-[1.4fr_1fr] gap-4">
-                <Card title="Understanding over the conversation">
-                  <ResponsiveContainer width="100%" height={200}>
-                    <AreaChart data={scoreOverTime}>
-                      <defs>
-                        <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor={FG} stopOpacity={0.35} />
-                          <stop offset="100%" stopColor={FG} stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                      <XAxis dataKey="name" stroke={MUTED} fontSize={11} />
-                      <YAxis domain={[0, 100]} stroke={MUTED} fontSize={11} width={28} />
-                      <Tooltip {...tooltip} />
-                      <Area type="monotone" dataKey="score" stroke={FG} strokeWidth={2} fill="url(#g)" />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </Card>
-
-                <Card title="Final understanding">
-                  <div className="flex items-center gap-2">
-                    <ResponsiveContainer width="55%" height={160}>
-                      <RadialBarChart
-                        innerRadius="70%"
-                        outerRadius="100%"
-                        data={[{ name: "score", value: detail.session?.final_score ?? 0, fill: FG }]}
-                        startAngle={90}
-                        endAngle={-270}
-                      >
-                        <RadialBar background={{ fill: "hsl(var(--muted))" }} dataKey="value" cornerRadius={8} />
-                      </RadialBarChart>
-                    </ResponsiveContainer>
-                    <div>
-                      <div className="text-3xl font-semibold tabular-nums">
-                        {detail.session?.final_score ?? 0}
-                      </div>
-                      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                        / 100
-                      </div>
-                      {detail.session?.mastery && (
-                        <div className="mt-1 flex items-center gap-1 text-xs">
-                          <CheckCircle2 className="h-3.5 w-3.5" /> mastery
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </Card>
-
-                <Card title="Topics covered" className="col-span-2">
-                  <div className="flex flex-wrap gap-2">
-                    {(detail.session?.topics ?? []).map((t) => (
-                      <span key={t} className="rounded-full border border-border px-2.5 py-1 text-xs">
+            {detail && detail.session && (
+              <div className="flex flex-col gap-3 rounded-lg border border-border p-5">
+                <div className="flex items-baseline justify-between">
+                  <span className="text-[15px] font-medium">Session detail</span>
+                  <span className="text-[13px] text-muted-foreground">
+                    {detail.session.final_score ?? 0} understanding · {detail.turns.length} turns
+                  </span>
+                </div>
+                {detail.session.rationale && (
+                  <p className="text-[13px] leading-relaxed text-muted-foreground">{detail.session.rationale}</p>
+                )}
+                {(detail.session.topics?.length ?? 0) > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {detail.session.topics.map((t) => (
+                      <span key={t} className="rounded-md bg-muted px-2.5 py-1 text-xs">
                         {t}
                       </span>
                     ))}
-                    {(detail.session?.topics?.length ?? 0) === 0 && (
-                      <span className="text-xs text-muted-foreground">No topics recorded.</span>
-                    )}
                   </div>
-                  {detail.session?.rationale && (
-                    <p className="mt-3 text-xs text-muted-foreground">{detail.session.rationale}</p>
-                  )}
-                  <div className="mt-3 grid grid-cols-3 gap-3">
-                    <MiniStat label="Turns" value={detail.turns.length} />
-                    <MiniStat label="Score checks" value={detail.scoreSeries.length} />
-                    <MiniStat
-                      label="Engagement"
-                      value={`${engagement(detail)}%`}
-                    />
-                  </div>
-                </Card>
-
-                {/* engagement donut */}
-                <Card title="Engagement (on-topic share)" className="col-span-2">
-                  <ResponsiveContainer width="100%" height={140}>
-                    <PieChart>
-                      <Pie
-                        data={[
-                          { name: "On topic", value: engagement(detail) },
-                          { name: "Off", value: 100 - engagement(detail) },
-                        ]}
-                        dataKey="value"
-                        innerRadius={40}
-                        outerRadius={60}
-                        paddingAngle={2}
-                      >
-                        <Cell fill={FG} />
-                        <Cell fill="hsl(var(--muted))" />
-                      </Pie>
-                      <Tooltip {...tooltip} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </Card>
+                )}
               </div>
             )}
           </>
@@ -258,47 +203,11 @@ const tooltip = {
   },
 } as const;
 
-function engagement(detail: SessionDetail): number {
-  // share of score-check turns; proxy from rationale/score presence is unavailable,
-  // so use a simple heuristic: scored turns vs total turns.
-  if (detail.turns.length === 0) return 0;
-  return Math.min(100, Math.round((detail.scoreSeries.length / Math.max(1, detail.turns.length / 2)) * 100));
-}
-
-function Card({
-  title,
-  children,
-  className,
-}: {
-  title: string;
-  children: React.ReactNode;
-  className?: string;
-}) {
+function Stat({ label, value }: { label: string; value: number }) {
   return (
-    <div className={cn("rounded-lg border border-border p-4", className)}>
-      <h3 className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">{title}</h3>
-      {children}
-    </div>
-  );
-}
-
-function Stat({ label, value, icon }: { label: string; value: number; icon?: boolean }) {
-  return (
-    <div className="rounded-lg border border-border p-3">
-      <div className="flex items-center gap-1 text-2xl font-semibold tabular-nums">
-        {icon && <CheckCircle2 className="h-4 w-4" />}
-        {value}
-      </div>
-      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
-    </div>
-  );
-}
-
-function MiniStat({ label, value }: { label: string; value: number | string }) {
-  return (
-    <div className="rounded-md bg-muted px-3 py-2">
-      <div className="text-lg font-semibold tabular-nums">{value}</div>
-      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
+    <div className="flex flex-col gap-2 rounded-lg bg-muted p-4">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="text-[28px] font-medium leading-none tabular-nums">{value}</span>
     </div>
   );
 }

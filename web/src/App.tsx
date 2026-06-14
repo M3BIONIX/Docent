@@ -1,10 +1,11 @@
 import { useEffect } from "react";
-import { GraduationCap, LogOut, Loader2 } from "lucide-react";
+import { LogOut, Loader2 } from "lucide-react";
 import { useAuth } from "@/store/useAuth";
 import { LoginScreen } from "@/features/auth/LoginScreen";
 import { AdminApp } from "@/features/admin/AdminApp";
 import { SessionScreen } from "@/features/voice/SessionScreen";
 import { Button } from "@/components/ui/button";
+import { Logo } from "@/components/Logo";
 
 export default function App() {
   const init = useAuth((s) => s.init);
@@ -28,14 +29,11 @@ export default function App() {
 
   return (
     <div className="flex h-screen flex-col bg-background text-foreground">
-      <header className="flex items-center gap-2 border-b border-border px-4 py-3">
-        <GraduationCap className="h-5 w-5" />
-        <h1 className="text-sm font-semibold tracking-tight">Docent</h1>
-        <span className="rounded-full border border-border px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-          {me.user.role}
-        </span>
+      <header className="flex items-center gap-3 border-b border-border px-6 py-3">
+        <Logo />
+        <span className="text-[13px] text-muted-foreground">{me.user.role}</span>
         <div className="ml-auto flex items-center gap-3">
-          <span className="text-xs text-muted-foreground">{me.user.name || me.user.email}</span>
+          <span className="text-[13px] text-muted-foreground">{me.user.name || me.user.email}</span>
           <Button variant="ghost" size="sm" onClick={logout}>
             <LogOut className="h-4 w-4" /> Sign out
           </Button>
