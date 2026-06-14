@@ -18,6 +18,8 @@ interface SessionState {
   masteryReached: boolean;
   rationale: string | null;
   assistantSpeaking: boolean;
+  /** Live, in-progress tutor transcript streamed word-by-word as it speaks. */
+  assistantPartial: string;
   error: string | null;
 
   start: () => Promise<void>;
@@ -27,6 +29,12 @@ interface SessionState {
 
 let client: RealtimeClient | null = null;
 let evaluating = false;
+
+function isSubstantiveTurn(text: string): boolean {
+  const clean = text.replace(/\s+/g, " ").trim();
+  const words = clean.split(" ").filter(Boolean);
+  return clean.length >= 10 && words.length >= 3;
+}
 
 export function getOrbLevel(): number {
   return client?.getLevel() ?? 0;
@@ -44,6 +52,7 @@ export const useSession = create<SessionState>((set, get) => ({
   masteryReached: false,
   rationale: null,
   assistantSpeaking: false,
+  assistantPartial: "",
   error: null,
 
   start: async () => {
@@ -55,6 +64,7 @@ export const useSession = create<SessionState>((set, get) => ({
       understandingScore: 0,
       masteryReached: false,
       rationale: null,
+      assistantPartial: "",
     });
     try {
       const { sessionId, instructions, topics } = await startSession();
@@ -69,15 +79,45 @@ export const useSession = create<SessionState>((set, get) => ({
             set({ phase: "idle", error: get().error ?? "Voice connection failed. Check microphone permissions." });
         },
         onError: (message) => set({ error: message }),
-        onSpeakingChange: (speaking) => set({ assistantSpeaking: speaking }),
+        onSpeakingChange: (speaking) => {
+          if (speaking) {
+            set({ assistantSpeaking: true });
+            return;
+          }
+          // Audio finished — THIS is when the turn is truly over. Commit the spoken
+          // line now (not when the transcript text finished generating, which happens
+          // much earlier), so the karaoke highlight runs to the end of the speech.
+          const pending = get().assistantPartial.trim();
+          if (pending) {
+            set({
+              assistantSpeaking: false,
+              assistantPartial: "",
+              transcript: [...get().transcript, { role: "assistant", text: pending }],
+            });
+            void postTurn(sessionId, "assistant", pending).catch(() => undefined);
+          } else {
+            set({ assistantSpeaking: false });
+          }
+        },
+        onAssistantDelta: (delta) =>
+          set({ assistantPartial: get().assistantPartial + delta, assistantSpeaking: true }),
         onAssistantTranscript: (text) => {
-          set({ transcript: [...get().transcript, { role: "assistant", text }] });
-          void postTurn(sessionId, "assistant", text).catch(() => undefined);
+          // The full transcript is ready, but the tutor is usually still speaking it.
+          // Replace the buffer with the authoritative full text and keep streaming the
+          // highlight; only commit early if the audio has somehow already stopped.
+          if (get().assistantSpeaking) {
+            set({ assistantPartial: text });
+          } else {
+            set({ transcript: [...get().transcript, { role: "assistant", text }], assistantPartial: "" });
+            void postTurn(sessionId, "assistant", text).catch(() => undefined);
+          }
         },
         onUserTranscript: (text) => {
           set({ transcript: [...get().transcript, { role: "user", text }] });
           void postTurn(sessionId, "user", text).catch(() => undefined);
-          void runEvaluation(set, get);
+          if (isSubstantiveTurn(text)) {
+            void runEvaluation(set, get);
+          }
         },
         onEndSession: () => void get().end(),
       });
@@ -100,7 +140,7 @@ export const useSession = create<SessionState>((set, get) => ({
         rationale,
       }).catch(() => undefined);
     }
-    set({ phase: "ended", assistantSpeaking: false });
+    set({ phase: "ended", assistantSpeaking: false, assistantPartial: "" });
   },
 
   clearError: () => set({ error: null }),

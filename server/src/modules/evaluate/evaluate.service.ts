@@ -38,14 +38,15 @@ function buildEvaluatePrompt(req: EvaluateRequest): string {
     '  "realignmentNote" (string|null): if off-track, a short internal note telling the tutor how to steer back.',
     '  "nextProbe" (string|null): a short internal suggestion for what the tutor should check next.',
     '  "masteryReached" (boolean): true ONLY if the learner has demonstrated genuine understanding across essentially all topics.',
+    '  "revealedMisunderstanding" (boolean): true ONLY if the learner actively said something incorrect or self-contradictory in their latest turns; false for silence, brevity, agreement, or unintelligible input.',
     '  "rationale" (string|null): one short sentence justifying the score.',
     "",
     "SCORING RULES (critical):",
     "- Agreement is NOT understanding. 'yes', 'ok', 'got it', 'makes sense', nodding along => NO credit. These must not raise the score.",
     "- Credit is earned ONLY when the learner explains an idea in their own words, gives a correct example, or correctly applies it.",
-    "- If the learner reveals a misunderstanding or gets something wrong, LOWER the score.",
+    "- Understanding is CUMULATIVE. Once the learner has genuinely demonstrated an idea, it stays credited. NEVER lower the score for silence, brief replies, filler, or garbled/unintelligible transcription — absence of new evidence is not a mistake.",
+    "- Lower the score ONLY when the learner actively states something factually incorrect or contradicts an idea they previously got right. When unsure whether something is a genuine error, do NOT lower the score.",
     "- The score reflects the WHOLE corpus. If only 2 of 8 topics have been genuinely demonstrated, the score must be low even if those 2 were perfect.",
-    "- Be conservative. When in doubt, score lower. Do not reward confident-sounding but empty answers.",
     "",
     `Prior score: ${req.priorScore === null ? "none yet" : req.priorScore}`,
     `Topics to be understood (the full corpus): ${req.topics.length ? req.topics.join("; ") : "unspecified"}`,
@@ -61,6 +62,7 @@ const DEFAULT_EVALUATION: EvaluateResponse = {
   realignmentNote: null,
   nextProbe: null,
   masteryReached: false,
+  revealedMisunderstanding: false,
   rationale: null,
 };
 
@@ -71,12 +73,17 @@ export async function evaluateUnderstanding(req: EvaluateRequest): Promise<Evalu
     if (!json) return { ...DEFAULT_EVALUATION, understandingScore: req.priorScore ?? 0 };
 
     const parsed = JSON.parse(json) as Record<string, unknown>;
+    const prior = req.priorScore ?? 0;
+    const revealedMisunderstanding = normalizeLooseBoolean(parsed.revealedMisunderstanding, false);
+    let understandingScore = normalizeScore(parsed.understandingScore) ?? prior;
+    if (!revealedMisunderstanding) understandingScore = Math.max(understandingScore, prior);
     return {
-      understandingScore: normalizeScore(parsed.understandingScore) ?? req.priorScore ?? 0,
+      understandingScore,
       onTrack: normalizeLooseBoolean(parsed.onTrack, true),
       realignmentNote: normalizeLooseText(parsed.realignmentNote, 220),
       nextProbe: normalizeLooseText(parsed.nextProbe, 220),
       masteryReached: normalizeLooseBoolean(parsed.masteryReached, false),
+      revealedMisunderstanding,
       rationale: normalizeLooseText(parsed.rationale, 280),
     };
   } catch (error) {

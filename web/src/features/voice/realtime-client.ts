@@ -5,6 +5,9 @@ export interface RealtimeCallbacks {
   onDisconnected?: () => void;
   onError?: (message: string) => void;
   onUserTranscript?: (text: string) => void;
+  /** Incremental assistant transcript chunk, emitted as the tutor speaks. */
+  onAssistantDelta?: (delta: string) => void;
+  /** Final assistant transcript for the turn (commits + clears the streaming buffer). */
   onAssistantTranscript?: (text: string) => void;
   onSpeakingChange?: (speaking: boolean) => void;
   onEndSession?: (reason: string) => void;
@@ -13,6 +16,7 @@ export interface RealtimeCallbacks {
 type RealtimeServerEvent = {
   type?: string;
   transcript?: string;
+  delta?: string;
   response?: { output?: { type?: string; name?: string; arguments?: string }[] };
   error?: { message?: string };
 };
@@ -212,6 +216,10 @@ export class RealtimeClient {
     switch (event.type) {
       case "conversation.item.input_audio_transcription.completed":
         if (event.transcript?.trim()) this.cb.onUserTranscript?.(event.transcript.trim());
+        break;
+      case "response.output_audio_transcript.delta":
+      case "response.audio_transcript.delta":
+        if (event.delta) this.cb.onAssistantDelta?.(event.delta);
         break;
       case "response.output_audio_transcript.done":
       case "response.audio_transcript.done":

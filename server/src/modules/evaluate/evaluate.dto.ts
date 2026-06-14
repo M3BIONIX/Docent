@@ -29,6 +29,8 @@ export interface EvaluateResponse {
   nextProbe: string | null;
   /** True only when broad, genuine understanding has been demonstrated. */
   masteryReached: boolean;
+  /** True only when the learner actively stated something incorrect or self-contradictory. */
+  revealedMisunderstanding: boolean;
   /** One-line reason for the score (shown to the learner at the end). */
   rationale: string | null;
 }

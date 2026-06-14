@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Loader2, UserPlus, Shield, User, Check } from "lucide-react";
+import { Loader2, Plus, Check } from "lucide-react";
 import {
   adminListUsers,
   adminCreateLearner,
@@ -12,6 +12,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
+function initials(u: AdminUser): string {
+  const base = (u.name || u.email).trim();
+  const parts = base.split(/[\s@.]+/).filter(Boolean);
+  return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase() || base.slice(0, 2).toUpperCase();
+}
+
 export function UsersTab() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [docs, setDocs] = useState<DocMeta[]>([]);
@@ -20,7 +26,6 @@ export function UsersTab() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // add-learner form
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", password: "" });
   const [adding, setAdding] = useState(false);
@@ -77,13 +82,16 @@ export function UsersTab() {
   };
 
   return (
-    <div className="grid grid-cols-[1fr_1.2fr] gap-6">
-      {/* users list */}
-      <div className="flex flex-col gap-3">
+    <div className="flex gap-8">
+      {/* learners */}
+      <div className="flex w-[320px] shrink-0 flex-col gap-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold">Users</h2>
+          <div className="flex items-baseline gap-2">
+            <h2 className="text-base font-medium">Learners</h2>
+            <span className="text-[13px] text-muted-foreground">{users.length}</span>
+          </div>
           <Button size="sm" variant="outline" onClick={() => setShowAdd((s) => !s)}>
-            <UserPlus className="h-4 w-4" /> Add learner
+            <Plus className="h-4 w-4" /> Add
           </Button>
         </div>
 
@@ -106,27 +114,25 @@ export function UsersTab() {
           </form>
         )}
 
-        <div className="flex flex-col divide-y divide-border rounded-md border border-border">
+        <div className="flex flex-col gap-0.5">
           {users.map((u) => (
             <button
               key={u.id}
               onClick={() => selectUser(u)}
               className={cn(
-                "flex items-center gap-3 px-3 py-2 text-left text-sm transition-colors hover:bg-muted",
+                "flex h-14 items-center gap-3 rounded-md px-2.5 text-left transition-colors hover:bg-muted",
                 selected?.id === u.id && "bg-muted",
               )}
             >
-              {u.role === "admin" ? (
-                <Shield className="h-4 w-4 text-muted-foreground" />
-              ) : (
-                <User className="h-4 w-4 text-muted-foreground" />
-              )}
-              <span className="flex-1 truncate">
-                {u.name || u.email}
-                <span className="ml-1 text-[11px] text-muted-foreground">{u.email}</span>
-              </span>
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-foreground text-[12px] font-medium text-background">
+                {initials(u)}
+              </div>
+              <div className="flex min-w-0 flex-col">
+                <span className="truncate text-sm font-medium">{u.name || u.email}</span>
+                <span className="truncate text-xs text-muted-foreground">{u.email}</span>
+              </div>
               {u.role === "learner" && (
-                <span className="text-[11px] text-muted-foreground">{u.doc_count} docs</span>
+                <span className="ml-auto shrink-0 text-xs text-muted-foreground">{u.doc_count} docs</span>
               )}
             </button>
           ))}
@@ -135,44 +141,56 @@ export function UsersTab() {
       </div>
 
       {/* assignment panel */}
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-1 flex-col gap-5">
         {!selected || selected.role === "admin" ? (
-          <p className="rounded-md border border-dashed border-border px-3 py-6 text-center text-xs text-muted-foreground">
-            Select a learner to choose which documents they learn.
+          <p className="rounded-lg border border-dashed border-border px-3 py-10 text-center text-[13px] text-muted-foreground">
+            Select a learner to choose which documents they study.
           </p>
         ) : (
           <>
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold">
-                Documents for {selected.name || selected.email}
-              </h2>
-              <Button size="sm" disabled={saving} onClick={saveAssignments}>
-                {saving && <Loader2 className="h-4 w-4 animate-spin" />} Save
+            <div className="flex items-end justify-between">
+              <div className="flex flex-col gap-1">
+                <h2 className="text-lg font-medium">Documents for {selected.name || selected.email}</h2>
+                <p className="text-[13px] text-muted-foreground">
+                  Choose which documents this learner can study by voice
+                </p>
+              </div>
+              <Button disabled={saving} onClick={saveAssignments} className="h-10">
+                {saving && <Loader2 className="h-4 w-4 animate-spin" />} Save changes
               </Button>
             </div>
-            <div className="flex flex-col divide-y divide-border rounded-md border border-border">
+            <div className="overflow-hidden rounded-lg border border-border">
               {docs.length === 0 && (
-                <p className="px-3 py-6 text-center text-xs text-muted-foreground">
+                <p className="px-4 py-8 text-center text-[13px] text-muted-foreground">
                   Upload documents first (Documents tab).
                 </p>
               )}
-              {docs.map((d) => {
+              {docs.map((d, i) => {
                 const on = assigned.has(d.id);
                 return (
                   <button
                     key={d.id}
                     onClick={() => toggle(d.id)}
-                    className="flex items-center gap-3 px-3 py-2 text-left text-sm hover:bg-muted"
+                    className={cn(
+                      "flex h-16 w-full items-center gap-3.5 px-4 text-left",
+                      i > 0 && "border-t border-border/60",
+                    )}
                   >
                     <span
                       className={cn(
-                        "flex h-4 w-4 items-center justify-center rounded border border-border",
-                        on && "bg-foreground text-background",
+                        "flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px]",
+                        on ? "bg-foreground text-background" : "border border-muted-foreground/50",
                       )}
                     >
                       {on && <Check className="h-3 w-3" />}
                     </span>
-                    <span className="flex-1 truncate">{d.title}</span>
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium">{d.title}</span>
+                      <span className="text-xs text-muted-foreground">{d.chunk_count ?? 0} sections</span>
+                    </div>
+                    <span className={cn("ml-auto text-[13px]", on ? "" : "text-muted-foreground")}>
+                      {on ? "Assigned" : "Not assigned"}
+                    </span>
                   </button>
                 );
               })}

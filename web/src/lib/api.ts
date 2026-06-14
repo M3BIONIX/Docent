@@ -64,6 +64,7 @@ export interface EvaluateResponse {
   realignmentNote: string | null;
   nextProbe: string | null;
   masteryReached: boolean;
+  revealedMisunderstanding: boolean;
   rationale: string | null;
 }
 export const evaluate = (input: {
